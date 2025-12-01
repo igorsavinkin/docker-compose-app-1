@@ -1,0 +1,13 @@
+﻿# Environment
+.env
+
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp

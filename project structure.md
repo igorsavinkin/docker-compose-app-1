@@ -7,4 +7,8 @@
 
 ## Схема взаимодействия
 
+<<<<<<< Updated upstream
 ![Project Structure](common/project-containers.png "Structure")
+=======
+![Project Structure](common\project-containers.png , "Structure")
+>>>>>>> Stashed changes

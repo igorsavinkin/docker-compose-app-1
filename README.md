@@ -7,7 +7,18 @@ A simple REST API application built with Node.js, Express, and PostgreSQL, fully
 ```
 /
 ├── docker-compose.yml
+├── .env                      # Переменные окружения (не в git)
+├── .env.example              # Шаблон переменных
+├── .gitignore
 ├── README.md
+├── project structure.md
+├── docker-vs-docker-compose.md
+├── common/
+│   └── project-containers.png
+├── nginx/
+│   └── nginx.conf            # Конфигурация nginx
+├── frontend/
+│   └── index.html            # Статический фронтенд
 └── backend/
     ├── Dockerfile
     ├── package.json
@@ -20,6 +31,7 @@ A simple REST API application built with Node.js, Express, and PostgreSQL, fully
 - **Runtime:** Node.js 16 (Alpine)
 - **Framework:** Express.js
 - **Database:** PostgreSQL 13
+- **Web Server:** Nginx (Alpine)
 - **Containerization:** Docker & Docker Compose
 
 ## Quick Start
@@ -35,7 +47,10 @@ A simple REST API application built with Node.js, Express, and PostgreSQL, fully
 docker-compose up --build
 ```
 
-The API will be available at `http://localhost:3000`
+После запуска:
+- **Веб-интерфейс:** http://localhost (nginx)
+- **API через nginx:** http://localhost/api/users
+- **API напрямую:** http://localhost:3000/users
 
 ### Stop the Application
 
@@ -48,6 +63,29 @@ To remove database data:
 ```bash
 docker-compose down -v
 ```
+
+## Nginx
+
+Nginx выполняет две функции:
+
+### Статические файлы
+Раздаёт файлы из папки `frontend/` на порту **80**
+
+### Reverse Proxy
+Все запросы `/api/*` проксируются на backend (порт 3000):
+
+| Запрос | Проксируется на |
+|--------|-----------------|
+| `/api/` | `http://backend:3000/` |
+| `/api/users` | `http://backend:3000/users` |
+
+### Порты
+
+| Порт | Сервис | Описание |
+|------|--------|----------|
+| 80 | nginx | Веб-интерфейс + API прокси |
+| 3000 | backend | Node.js API (прямой доступ) |
+| 5432 | db | PostgreSQL |
 
 ## API Endpoints
 
@@ -107,7 +145,13 @@ docker exec -it node-app-db2-db-1 psql -U user -d mydb
 
 ## Environment Variables
 
-### Backend Service
+Переменные окружения хранятся в файле `.env`. Для начала работы:
+
+```bash
+cp .env.example .env
+```
+
+### Доступные переменные
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -116,6 +160,9 @@ docker exec -it node-app-db2-db-1 psql -U user -d mydb
 | DB_NAME | mydb | Database name |
 | DB_USER | user | Database user |
 | DB_PASSWORD | password | Database password |
+| NGINX_PORT | 80 | Nginx port |
+| BACKEND_PORT | 3000 | Backend API port |
+| POSTGRES_PORT | 5432 | PostgreSQL port |
 
 ## Development
 

@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Docker App</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: #e8e8e8;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 2rem;
+            font-size: 2.5rem;
+            background: linear-gradient(90deg, #e94560, #f39c12);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .card h2 {
+            color: #e94560;
+            margin-bottom: 1rem;
+            font-size: 1.3rem;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #aaa;
+        }
+
+        input {
+            width: 100%;
+            padding: 0.8rem 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            color: #fff;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #e94560;
+        }
+
+        button {
+            background: linear-gradient(90deg, #e94560, #f39c12);
+            color: #fff;
+            border: none;
+            padding: 0.8rem 2rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(233, 69, 96, 0.4);
+        }
+
+        .users-list {
+            list-style: none;
+        }
+
+        .users-list li {
+            padding: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .users-list li:last-child {
+            border-bottom: none;
+        }
+
+        .user-name {
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .user-email {
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        .status {
+            text-align: center;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .status.success {
+            background: rgba(39, 174, 96, 0.2);
+            color: #27ae60;
+        }
+
+        .status.error {
+            background: rgba(231, 76, 60, 0.2);
+            color: #e74c3c;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #666;
+            padding: 2rem;
+        }
+
+        .api-info {
+            font-family: 'Consolas', monospace;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 1rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            color: #4ecdc4;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🐳 Docker App</h1>
+
+        <div class="card">
+            <h2>📡 Статус API</h2>
+            <div id="api-status" class="api-info">Проверка подключения...</div>
+        </div>
+
+        <div class="card">
+            <h2>➕ Добавить пользователя</h2>
+            <form id="user-form">
+                <div class="form-group">
+                    <label for="name">Имя</label>
+                    <input type="text" id="name" placeholder="Введите имя" required>
+                </div>
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" placeholder="Введите email" required>
+                </div>
+                <button type="submit">Добавить</button>
+            </form>
+            <div id="form-status"></div>
+        </div>
+
+        <div class="card">
+            <h2>👥 Пользователи</h2>
+            <ul id="users-list" class="users-list">
+                <li class="empty-state">Загрузка...</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+
+        // Проверка статуса API
+        async function checkApiStatus() {
+            const statusEl = document.getElementById('api-status');
+            try {
+                const response = await fetch(`${API_BASE}/`);
+                const data = await response.json();
+                statusEl.innerHTML = `✅ API подключен<br>Сообщение: ${data.message}<br>Время: ${data.timestamp}`;
+            } catch (error) {
+                statusEl.innerHTML = `❌ Ошибка подключения: ${error.message}`;
+            }
+        }
+
+        // Загрузка пользователей
+        async function loadUsers() {
+            const listEl = document.getElementById('users-list');
+            try {
+                const response = await fetch(`${API_BASE}/users`);
+                const users = await response.json();
+                
+                if (users.length === 0) {
+                    listEl.innerHTML = '<li class="empty-state">Пользователей пока нет</li>';
+                    return;
+                }
+
+                listEl.innerHTML = users.map(user => `
+                    <li>
+                        <div>
+                            <span class="user-name">${user.name}</span>
+                            <br>
+                            <span class="user-email">${user.email}</span>
+                        </div>
+                        <span style="color: #666; font-size: 0.8rem">ID: ${user.id}</span>
+                    </li>
+                `).join('');
+            } catch (error) {
+                listEl.innerHTML = `<li class="empty-state">Ошибка загрузки: ${error.message}</li>`;
+            }
+        }
+
+        // Добавление пользователя
+        document.getElementById('user-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const statusEl = document.getElementById('form-status');
+            const name = document.getElementById('name').value;
+            const email = document.getElementById('email').value;
+
+            try {
+                const response = await fetch(`${API_BASE}/users`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, email })
+                });
+
+                if (response.ok) {
+                    statusEl.innerHTML = '<div class="status success">✅ Пользователь добавлен!</div>';
+                    document.getElementById('name').value = '';
+                    document.getElementById('email').value = '';
+                    loadUsers();
+                } else {
+                    throw new Error('Ошибка сервера');
+                }
+            } catch (error) {
+                statusEl.innerHTML = `<div class="status error">❌ ${error.message}</div>`;
+            }
+
+            setTimeout(() => statusEl.innerHTML = '', 3000);
+        });
+
+        // Инициализация
+        checkApiStatus();
+        loadUsers();
+    </script>
+</body>
+</html>
+
