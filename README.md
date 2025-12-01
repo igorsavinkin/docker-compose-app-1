@@ -33,6 +33,7 @@ A simple REST API application built with Node.js, Express, and PostgreSQL, fully
 - **Database:** PostgreSQL 13
 - **Web Server:** Nginx (Alpine)
 - **Containerization:** Docker & Docker Compose
+- **Monitoring:** Health checks для всех сервисов
 
 ## Quick Start
 
@@ -164,11 +165,36 @@ cp .env.example .env
 | BACKEND_PORT | 3000 | Backend API port |
 | POSTGRES_PORT | 5432 | PostgreSQL port |
 
+## Health Checks
+
+Все контейнеры настроены с health checks для мониторинга состояния:
+
+| Service | Check | Interval | Retries |
+|---------|-------|----------|---------|
+| db | `pg_isready` | 10s | 5 |
+| backend | HTTP GET localhost:3000 | 30s | 3 |
+| nginx | HTTP GET localhost:80 | 30s | 3 |
+
+### Проверка статуса
+
+```bash
+docker compose ps
+```
+
+### Детальная информация о health check
+
+```bash
+docker inspect --format='{{json .State.Health}}' <container_name>
+```
+
+### Порядок запуска
+
+Сервисы запускаются с учётом зависимостей:
+1. **db** запускается первым
+2. **backend** ждёт, пока db станет healthy
+3. **nginx** ждёт, пока backend станет healthy
+
 ## Development
 
 The backend folder is mounted as a volume, so changes to the source code will be reflected in the container. However, you'll need to restart the container to see the changes (or add nodemon for hot-reload).
-
-## License
-
-MIT
 
