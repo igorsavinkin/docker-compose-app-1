@@ -7,4 +7,4 @@
 
 ## Схема взаимодействия
 
-![Project Structure](common\project-containers.png "Structure")
+![Project Structure](common/project-containers.png "Structure")
