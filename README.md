@@ -23,7 +23,13 @@ A simple REST API application built with Node.js, Express, and PostgreSQL, fully
     ├── Dockerfile
     ├── package.json
     ├── server.js
-    └── init.sql
+    ├── init.sql
+    ├── migrate-config.js     # Конфигурация миграций
+    ├── run-migrations.js     # Модуль запуска миграций
+    └── migrations/           # Миграции базы данных
+        ├── 1701408000000_create-users-table.js
+        ├── 1701408001000_seed-initial-users.js
+        └── 1701408002000_add-user-phone-column.js
 ```
 
 ## Tech Stack
@@ -31,6 +37,7 @@ A simple REST API application built with Node.js, Express, and PostgreSQL, fully
 - **Runtime:** Node.js 16 (Alpine)
 - **Framework:** Express.js
 - **Database:** PostgreSQL 13
+- **Migrations:** node-pg-migrate
 - **Web Server:** Nginx (Alpine)
 - **Containerization:** Docker & Docker Compose
 - **Monitoring:** Health checks для всех сервисов
@@ -65,6 +72,64 @@ To remove database data:
 docker-compose down -v
 ```
 
+## Database Migrations
+
+Проект использует [node-pg-migrate](https://github.com/salsita/node-pg-migrate) для управления схемой базы данных.
+
+### Автоматический запуск
+
+Миграции автоматически применяются при запуске backend контейнера.
+
+### Команды миграций
+
+```bash
+# Применить все миграции
+docker-compose exec backend npm run migrate:up
+
+# Откатить последнюю миграцию
+docker-compose exec backend npm run migrate:down
+
+# Создать новую миграцию
+docker-compose exec backend npm run migrate:create -- название-миграции
+```
+
+### Структура миграции
+
+```javascript
+// migrations/TIMESTAMP_название-миграции.js
+
+exports.up = (pgm) => {
+  // Изменения схемы (применение)
+  pgm.createTable('posts', {
+    id: 'id',
+    title: { type: 'varchar(255)', notNull: true },
+    content: 'text',
+    created_at: { type: 'timestamp', default: pgm.func('CURRENT_TIMESTAMP') },
+  });
+};
+
+exports.down = (pgm) => {
+  // Откат изменений
+  pgm.dropTable('posts');
+};
+```
+
+### Текущие миграции
+
+| Миграция | Описание |
+|----------|----------|
+| `1701408000000_create-users-table` | Создание таблицы users |
+| `1701408001000_seed-initial-users` | Начальные тестовые данные |
+| `1701408002000_add-user-phone-column` | Добавление поля phone |
+
+### Таблица истории миграций
+
+Информация о применённых миграциях хранится в таблице `pgmigrations`:
+
+```sql
+SELECT * FROM pgmigrations ORDER BY run_on;
+```
+
 ## Nginx
 
 Nginx выполняет две функции:
@@ -95,6 +160,8 @@ Nginx выполняет две функции:
 | GET | `/` | Welcome message with timestamp |
 | GET | `/users` | Get all users |
 | POST | `/users` | Create a new user |
+| PUT | `/users/:id` | Update a user |
+| DELETE | `/users/:id` | Delete a user |
 
 ## Usage Examples
 
@@ -117,13 +184,43 @@ curl http://localhost:3000/users
 ```bash
 curl -X POST http://localhost:3000/users \
   -H "Content-Type: application/json" \
-  -d '{"name": "John Doe", "email": "john@example.com"}'
+  -d '{"name": "John Doe", "email": "john@example.com", "phone": "+7-999-123-4567"}'
 ```
 
 **PowerShell:**
 
 ```powershell
-Invoke-RestMethod -Uri "http://localhost:3000/users" -Method Post -ContentType "application/json" -Body '{"name": "John Doe", "email": "john@example.com"}'
+Invoke-RestMethod -Uri "http://localhost:3000/users" -Method Post -ContentType "application/json" -Body '{"name": "John Doe", "email": "john@example.com", "phone": "+7-999-123-4567"}'
+```
+
+### Update a User
+
+**Linux/macOS:**
+
+```bash
+curl -X PUT http://localhost:3000/users/1 \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Jane Doe", "email": "jane@example.com", "phone": "+7-999-765-4321"}'
+```
+
+**PowerShell:**
+
+```powershell
+Invoke-RestMethod -Uri "http://localhost:3000/users/1" -Method Put -ContentType "application/json" -Body '{"name": "Jane Doe", "email": "jane@example.com", "phone": "+7-999-765-4321"}'
+```
+
+### Delete a User
+
+**Linux/macOS:**
+
+```bash
+curl -X DELETE http://localhost:3000/users/1
+```
+
+**PowerShell:**
+
+```powershell
+Invoke-RestMethod -Uri "http://localhost:3000/users/1" -Method Delete
 ```
 
 ## Database Access
@@ -143,6 +240,23 @@ docker exec -it node-app-db2-db-1 psql -U user -d mydb
 | Database | mydb |
 | Username | user |
 | Password | password |
+
+### Database Schema
+
+```sql
+-- Таблица users
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100),
+    email VARCHAR(100),
+    phone VARCHAR(20),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Индексы
+CREATE INDEX users_email_index ON users (email);
+CREATE INDEX users_phone_index ON users (phone);
+```
 
 ## Environment Variables
 
@@ -198,3 +312,11 @@ docker inspect --format='{{json .State.Health}}' <container_name>
 
 The backend folder is mounted as a volume, so changes to the source code will be reflected in the container. However, you'll need to restart the container to see the changes (or add nodemon for hot-reload).
 
+### Пересборка после изменения зависимостей
+
+При изменении `package.json` необходимо пересобрать контейнер:
+
+```bash
+docker-compose build --no-cache backend
+docker-compose up -d -V
+```

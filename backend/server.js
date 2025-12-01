@@ -1,5 +1,6 @@
 const express = require('express');
 const { Pool } = require('pg');
+const { runMigrations } = require('./run-migrations');
 
 const app = express();
 const port = 3000;
@@ -15,22 +16,16 @@ const pool = new Pool({
 
 app.use(express.json());
 
-// Создаем таблицу при запуске
+// Инициализация базы данных через миграции
 async function initializeDatabase() {
   try {
-    const client = await pool.connect();
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(100),
-        email VARCHAR(100),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    console.log('Database initialized');
-    client.release();
+    // Запускаем миграции
+    await runMigrations();
+    console.log('Database initialized with migrations');
   } catch (err) {
     console.error('Database initialization error:', err);
+    // В production можно выбросить ошибку для остановки приложения
+    // throw err;
   }
 }
 
@@ -54,13 +49,45 @@ app.get('/users', async (req, res) => {
 
 // Добавить пользователя
 app.post('/users', async (req, res) => {
-  const { name, email } = req.body;
+  const { name, email, phone } = req.body;
   try {
     const result = await pool.query(
-      'INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *',
-      [name, email]
+      'INSERT INTO users (name, email, phone) VALUES ($1, $2, $3) RETURNING *',
+      [name, email, phone || null]
     );
     res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Обновить пользователя
+app.put('/users/:id', async (req, res) => {
+  const { id } = req.params;
+  const { name, email, phone } = req.body;
+  try {
+    const result = await pool.query(
+      'UPDATE users SET name = $1, email = $2, phone = $3 WHERE id = $4 RETURNING *',
+      [name, email, phone || null, id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Пользователь не найден' });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Удалить пользователя
+app.delete('/users/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query('DELETE FROM users WHERE id = $1 RETURNING *', [id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Пользователь не найден' });
+    }
+    res.json({ message: 'Пользователь удалён', user: result.rows[0] });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
