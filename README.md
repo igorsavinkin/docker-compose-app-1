@@ -19,10 +19,21 @@ A simple REST API application built with Node.js, Express, and PostgreSQL, fully
 │   └── nginx.conf            # Конфигурация nginx
 ├── frontend/
 │   └── index.html            # Статический фронтенд
+├── monitoring/               # Логирование и мониторинг
+│   ├── prometheus/
+│   │   └── prometheus.yml    # Конфигурация Prometheus
+│   └── grafana/
+│       ├── provisioning/     # Автоконфигурация Grafana
+│       │   ├── datasources/
+│       │   └── dashboards/
+│       └── dashboards/       # JSON дашборды
+│           └── nodejs-backend.json
 └── backend/
     ├── Dockerfile
     ├── package.json
     ├── server.js
+    ├── logger.js             # Модуль логирования (Winston)
+    ├── metrics.js            # Модуль метрик (Prometheus)
     ├── init.sql
     ├── migrate-config.js     # Конфигурация миграций
     ├── run-migrations.js     # Модуль запуска миграций
@@ -40,7 +51,9 @@ A simple REST API application built with Node.js, Express, and PostgreSQL, fully
 - **Migrations:** node-pg-migrate
 - **Web Server:** Nginx (Alpine)
 - **Containerization:** Docker & Docker Compose
-- **Monitoring:** Health checks для всех сервисов
+- **Logging:** Winston + Morgan
+- **Monitoring:** Prometheus + Grafana
+- **Health checks:** для всех сервисов
 
 ## Quick Start
 
@@ -59,6 +72,8 @@ docker-compose up --build
 - **Веб-интерфейс:** http://localhost (nginx)
 - **API через nginx:** http://localhost/api/users
 - **API напрямую:** http://localhost:3000/users
+- **Prometheus:** http://localhost:9090
+- **Grafana:** http://localhost:3001 (admin/admin)
 
 ### Stop the Application
 
@@ -151,13 +166,17 @@ Nginx выполняет две функции:
 |------|--------|----------|
 | 80 | nginx | Веб-интерфейс + API прокси |
 | 3000 | backend | Node.js API (прямой доступ) |
+| 3001 | grafana | Мониторинг (визуализация) |
 | 5432 | db | PostgreSQL |
+| 9090 | prometheus | Сбор метрик |
 
 ## API Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/` | Welcome message with timestamp |
+| GET | `/health` | Health check с информацией о состоянии |
+| GET | `/metrics` | Prometheus метрики |
 | GET | `/users` | Get all users |
 | POST | `/users` | Create a new user |
 | PUT | `/users/:id` | Update a user |
@@ -278,6 +297,11 @@ cp .env.example .env
 | NGINX_PORT | 80 | Nginx port |
 | BACKEND_PORT | 3000 | Backend API port |
 | POSTGRES_PORT | 5432 | PostgreSQL port |
+| LOG_LEVEL | info | Уровень логирования (error/warn/info/http/debug) |
+| PROMETHEUS_PORT | 9090 | Prometheus port |
+| GRAFANA_PORT | 3001 | Grafana port |
+| GRAFANA_USER | admin | Grafana admin username |
+| GRAFANA_PASSWORD | admin | Grafana admin password |
 
 ## Health Checks
 
@@ -286,8 +310,10 @@ cp .env.example .env
 | Service | Check | Interval | Retries |
 |---------|-------|----------|---------|
 | db | `pg_isready` | 10s | 5 |
-| backend | HTTP GET localhost:3000 | 30s | 3 |
+| backend | HTTP GET localhost:3000/health | 30s | 3 |
 | nginx | HTTP GET localhost:80 | 30s | 3 |
+| prometheus | HTTP GET localhost:9090/-/healthy | 30s | 3 |
+| grafana | HTTP GET localhost:3000/api/health | 30s | 3 |
 
 ### Проверка статуса
 
@@ -307,6 +333,152 @@ docker inspect --format='{{json .State.Health}}' <container_name>
 1. **db** запускается первым
 2. **backend** ждёт, пока db станет healthy
 3. **nginx** ждёт, пока backend станет healthy
+4. **prometheus** запускается параллельно
+5. **grafana** ждёт prometheus
+
+## Логирование и Мониторинг
+
+### Логирование (Winston + Morgan)
+
+Приложение использует **Winston** для структурированного логирования и **Morgan** для HTTP-логов.
+
+#### Уровни логирования
+
+| Уровень | Описание |
+|---------|----------|
+| error | Критические ошибки |
+| warn | Предупреждения |
+| info | Информационные сообщения (по умолчанию) |
+| http | HTTP запросы |
+| debug | Отладочная информация |
+
+#### Конфигурация
+
+Уровень логирования задаётся через переменную окружения:
+
+```bash
+LOG_LEVEL=debug docker-compose up
+```
+
+#### Файлы логов
+
+Логи сохраняются в volume `backend_logs`:
+
+| Файл | Содержимое |
+|------|------------|
+| `logs/combined.log` | Все логи (JSON формат) |
+| `logs/error.log` | Только ошибки |
+
+#### Просмотр логов
+
+```bash
+# Логи в реальном времени
+docker-compose logs -f backend
+
+# Файл логов
+docker-compose exec backend cat logs/combined.log
+```
+
+### Мониторинг (Prometheus + Grafana)
+
+#### Prometheus
+
+Сбор и хранение метрик. Доступен на http://localhost:9090
+
+**Конфигурация:** `monitoring/prometheus/prometheus.yml`
+
+#### Grafana
+
+Визуализация метрик. Доступен на http://localhost:3001
+
+| Параметр | Значение по умолчанию |
+|----------|----------------------|
+| Логин | admin |
+| Пароль | admin |
+
+При первом входе можно изменить пароль или пропустить.
+
+### Метрики приложения
+
+#### API Endpoint
+
+```
+GET /metrics
+```
+
+Возвращает метрики в формате Prometheus.
+
+#### Доступные метрики
+
+| Метрика | Тип | Описание |
+|---------|-----|----------|
+| `http_requests_total` | Counter | Общее количество HTTP запросов |
+| `http_request_duration_seconds` | Histogram | Время ответа на запросы |
+| `db_queries_total` | Counter | Количество запросов к БД |
+| `db_errors_total` | Counter | Количество ошибок БД |
+| `db_active_connections` | Gauge | Активные соединения с БД |
+| `nodejs_*` | Various | Стандартные метрики Node.js |
+| `process_*` | Various | Метрики процесса |
+
+#### Примеры запросов PromQL
+
+```promql
+# Запросов в секунду
+rate(http_requests_total[5m])
+
+# 95-й перцентиль времени ответа
+histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
+
+# Количество ошибок за последний час
+increase(http_requests_total{status_code=~"5.."}[1h])
+
+# Использование памяти
+process_resident_memory_bytes
+```
+
+### Дашборд Grafana
+
+Предустановленный дашборд "Node.js Backend Dashboard" включает:
+
+- 📊 HTTP запросов за 5 минут
+- ❌ Ошибки базы данных
+- 💾 Использование памяти (RSS)
+- 🔗 Активные соединения БД
+- 📈 Запросы в секунду по маршрутам
+- ⏱️ Время ответа (95-й перцентиль)
+- 🖥️ CPU Usage
+- 📉 Node.js Heap Memory
+- 📊 HTTP статусы ответов
+
+### Health Check
+
+Расширенный эндпоинт для проверки состояния:
+
+```bash
+curl http://localhost:3000/health
+```
+
+Ответ:
+```json
+{
+  "status": "healthy",
+  "timestamp": "2024-01-15T10:30:00.000Z",
+  "uptime": 3600.123,
+  "memory": {
+    "rss": 50331648,
+    "heapTotal": 18890752,
+    "heapUsed": 12345678
+  }
+}
+```
+
+### Порты мониторинга
+
+| Порт | Сервис | Описание |
+|------|--------|----------|
+| 9090 | Prometheus | Сбор метрик |
+| 3001 | Grafana | Визуализация |
+| 3000/metrics | Backend | Endpoint метрик |
 
 ## Development
 
