@@ -4,6 +4,7 @@ const { Pool } = require('pg');
 const { runMigrations } = require('./run-migrations');
 const logger = require('./logger');
 const { register, metricsMiddleware, dbErrorsTotal, dbActiveConnections, dbQueriesTotal } = require('./metrics');
+const { createAuthRouter } = require('./auth');
 
 const app = express();
 const port = 3000;
@@ -57,6 +58,10 @@ app.use(metricsMiddleware);
 
 // HTTP логирование через morgan -> winston
 app.use(morgan('combined', { stream: logger.stream }));
+
+// Подключение роутера аутентификации
+const { router: authRouter, authenticateToken, requireRole, ROLES } = createAuthRouter(pool, logger, dbQuery);
+app.use('/auth', authRouter);
 
 // Инициализация базы данных через миграции
 async function initializeDatabase() {

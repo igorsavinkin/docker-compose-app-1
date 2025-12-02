@@ -3,8 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Docker App</title>
+    <title>ChronoLegal - Система управления</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: #1a1a25;
+            --bg-input: #0d0d14;
+            --border-color: #2a2a3a;
+            --border-focus: #6366f1;
+            --text-primary: #f0f0f5;
+            --text-secondary: #8888a0;
+            --text-muted: #5a5a70;
+            --accent-primary: #6366f1;
+            --accent-secondary: #8b5cf6;
+            --accent-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --role-admin: #ef4444;
+            --role-manager: #f59e0b;
+            --role-editor: #10b981;
+            --role-client: #6366f1;
+            --shadow-glow: 0 0 40px rgba(99, 102, 241, 0.15);
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -12,252 +37,1727 @@
         }
 
         body {
-            font-family: 'Segoe UI', system-ui, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            font-family: 'Outfit', -apple-system, sans-serif;
+            background: var(--bg-primary);
             min-height: 100vh;
-            color: #e8e8e8;
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+
+        /* Animated background */
+        .bg-pattern {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background: 
+                radial-gradient(ellipse at 20% 20%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(139, 92, 246, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(168, 85, 247, 0.04) 0%, transparent 70%);
+        }
+
+        .grid-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background-image: 
+                linear-gradient(rgba(99, 102, 241, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(99, 102, 241, 0.03) 1px, transparent 1px);
+            background-size: 60px 60px;
+        }
+
+        /* Container styles */
+        .app-container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Auth screens */
+        .auth-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
             padding: 2rem;
         }
 
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
+        .auth-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 3rem;
+            width: 100%;
+            max-width: 440px;
+            box-shadow: var(--shadow-glow);
+            position: relative;
+            overflow: hidden;
         }
 
-        h1 {
+        .auth-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--accent-gradient);
+        }
+
+        .auth-logo {
             text-align: center;
+            margin-bottom: 2.5rem;
+        }
+
+        .auth-logo h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.02em;
+        }
+
+        .auth-logo p {
+            color: var(--text-secondary);
+            margin-top: 0.5rem;
+            font-size: 0.95rem;
+        }
+
+        .auth-tabs {
+            display: flex;
+            gap: 0.5rem;
             margin-bottom: 2rem;
-            font-size: 2.5rem;
-            background: linear-gradient(90deg, #e94560, #f39c12);
+            background: var(--bg-input);
+            padding: 4px;
+            border-radius: 12px;
+        }
+
+        .auth-tab {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 500;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .auth-tab.active {
+            background: var(--accent-primary);
+            color: white;
+        }
+
+        .auth-tab:hover:not(.active) {
+            color: var(--text-primary);
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        /* Form styles */
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            font-weight: 500;
+            letter-spacing: 0.02em;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 0.9rem 1.1rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.95rem;
+            transition: var(--transition);
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--border-focus);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+        }
+
+        .form-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .input-with-icon {
+            position: relative;
+        }
+
+        .input-with-icon .form-input {
+            padding-left: 2.8rem;
+        }
+
+        .input-icon {
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            width: 18px;
+            height: 18px;
+        }
+
+        .password-toggle {
+            position: absolute;
+            right: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 0;
+            display: flex;
+        }
+
+        .password-toggle:hover {
+            color: var(--text-secondary);
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.9rem 1.5rem;
+            border-radius: 10px;
+            font-family: inherit;
+            font-size: 0.95rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+            border: none;
+        }
+
+        .btn-primary {
+            width: 100%;
+            background: var(--accent-gradient);
+            color: white;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--accent-primary);
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--accent-primary);
+            padding: 0.5rem;
+        }
+
+        .btn-ghost:hover {
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        /* Links */
+        .auth-link {
+            color: var(--accent-primary);
+            text-decoration: none;
+            font-weight: 500;
+            transition: var(--transition);
+        }
+
+        .auth-link:hover {
+            color: var(--accent-secondary);
+        }
+
+        .auth-footer {
+            text-align: center;
+            margin-top: 1.5rem;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        /* Status messages */
+        .status-message {
+            padding: 1rem;
+            border-radius: 10px;
+            margin-bottom: 1.5rem;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .status-success {
+            background: rgba(16, 185, 129, 0.15);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: var(--success);
+        }
+
+        .status-error {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: var(--error);
+        }
+
+        /* Dashboard layout */
+        .sidebar {
+            width: 260px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            height: 100vh;
+            left: 0;
+            top: 0;
+        }
+
+        .sidebar-logo {
+            padding: 0.5rem 0 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 1.5rem;
+        }
+
+        .sidebar-logo h2 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            background: var(--accent-gradient);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
 
-        .card {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 16px;
-            padding: 2rem;
-            margin-bottom: 2rem;
-            backdrop-filter: blur(10px);
+        .sidebar-nav {
+            flex: 1;
         }
 
-        .card h2 {
-            color: #e94560;
-            margin-bottom: 1rem;
-            font-size: 1.3rem;
-        }
-
-        .form-group {
-            margin-bottom: 1rem;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 0.5rem;
-            color: #aaa;
-        }
-
-        input {
-            width: 100%;
-            padding: 0.8rem 1rem;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 8px;
-            background: rgba(0, 0, 0, 0.3);
-            color: #fff;
-            font-size: 1rem;
-            transition: border-color 0.3s;
-        }
-
-        input:focus {
-            outline: none;
-            border-color: #e94560;
-        }
-
-        button {
-            background: linear-gradient(90deg, #e94560, #f39c12);
-            color: #fff;
-            border: none;
-            padding: 0.8rem 2rem;
-            border-radius: 8px;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(233, 69, 96, 0.4);
-        }
-
-        .users-list {
-            list-style: none;
-        }
-
-        .users-list li {
-            padding: 1rem;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        .nav-item {
             display: flex;
-            justify-content: space-between;
             align-items: center;
+            gap: 0.75rem;
+            padding: 0.85rem 1rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-radius: 10px;
+            margin-bottom: 0.25rem;
+            transition: var(--transition);
+            cursor: pointer;
+            border: none;
+            background: none;
+            width: 100%;
+            font-family: inherit;
+            font-size: 0.9rem;
         }
 
-        .users-list li:last-child {
-            border-bottom: none;
+        .nav-item:hover {
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--text-primary);
+        }
+
+        .nav-item.active {
+            background: var(--accent-primary);
+            color: white;
+        }
+
+        .nav-item svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .sidebar-user {
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            border-radius: 10px;
+            background: var(--bg-card);
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            background: var(--accent-gradient);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .user-details {
+            flex: 1;
+            min-width: 0;
         }
 
         .user-name {
-            font-weight: 600;
-            color: #fff;
-        }
-
-        .user-email {
-            color: #888;
+            font-weight: 500;
             font-size: 0.9rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
-        .status {
-            text-align: center;
-            padding: 1rem;
-            border-radius: 8px;
-            margin-bottom: 1rem;
+        .user-role {
+            font-size: 0.75rem;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            display: inline-block;
+            margin-top: 0.25rem;
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.05em;
         }
 
-        .status.success {
-            background: rgba(39, 174, 96, 0.2);
-            color: #27ae60;
-        }
+        .role-admin { background: rgba(239, 68, 68, 0.2); color: var(--role-admin); }
+        .role-manager { background: rgba(245, 158, 11, 0.2); color: var(--role-manager); }
+        .role-editor { background: rgba(16, 185, 129, 0.2); color: var(--role-editor); }
+        .role-client { background: rgba(99, 102, 241, 0.2); color: var(--role-client); }
 
-        .status.error {
-            background: rgba(231, 76, 60, 0.2);
-            color: #e74c3c;
-        }
-
-        .empty-state {
-            text-align: center;
-            color: #666;
+        /* Main content */
+        .main-content {
+            flex: 1;
+            margin-left: 260px;
             padding: 2rem;
         }
 
-        .api-info {
-            font-family: 'Consolas', monospace;
-            background: rgba(0, 0, 0, 0.4);
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        .page-title {
+            font-size: 1.75rem;
+            font-weight: 600;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        /* Table styles */
+        .table-container {
+            overflow-x: auto;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .data-table th,
+        .data-table td {
             padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .data-table th {
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .data-table tr:hover td {
+            background: rgba(99, 102, 241, 0.05);
+        }
+
+        .data-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Status badges */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.35rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .status-active {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--success);
+        }
+
+        .status-inactive {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--error);
+        }
+
+        /* Action buttons */
+        .action-btn {
+            padding: 0.5rem;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-radius: 6px;
+            transition: var(--transition);
+        }
+
+        .action-btn:hover {
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--accent-primary);
+        }
+
+        .action-btn.danger:hover {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--error);
+        }
+
+        /* Select dropdown */
+        .form-select {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
             border-radius: 8px;
+            color: var(--text-primary);
+            font-family: inherit;
             font-size: 0.9rem;
-            color: #4ecdc4;
+            cursor: pointer;
+            transition: var(--transition);
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%238888a0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+            background-size: 18px;
+            padding-right: 2.5rem;
+        }
+
+        .form-select:focus {
+            outline: none;
+            border-color: var(--border-focus);
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: var(--transition);
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 2rem;
+            width: 100%;
+            max-width: 480px;
+            transform: scale(0.9);
+            transition: var(--transition);
+        }
+
+        .modal-overlay.active .modal {
+            transform: scale(1);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 8px;
+            transition: var(--transition);
+        }
+
+        .modal-close:hover {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--error);
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+            margin-top: 2rem;
+        }
+
+        /* Stats cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .stat-icon.admin { background: rgba(239, 68, 68, 0.15); color: var(--role-admin); }
+        .stat-icon.manager { background: rgba(245, 158, 11, 0.15); color: var(--role-manager); }
+        .stat-icon.editor { background: rgba(16, 185, 129, 0.15); color: var(--role-editor); }
+        .stat-icon.client { background: rgba(99, 102, 241, 0.15); color: var(--role-client); }
+
+        .stat-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        /* Hide elements */
+        .hidden {
+            display: none !important;
+        }
+
+        /* Loading spinner */
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+
+            .main-content {
+                margin-left: 0;
+            }
+
+            .auth-card {
+                padding: 2rem 1.5rem;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🐳 Docker App</h1>
+    <div class="bg-pattern"></div>
+    <div class="grid-overlay"></div>
+
+    <!-- Auth View -->
+    <div id="auth-view" class="auth-container">
+        <div class="auth-card">
+            <div class="auth-logo">
+                <h1>⚖️ ChronoLegal</h1>
+                <p>Система управления документами</p>
+            </div>
+
+            <div id="auth-status"></div>
+
+            <!-- Login / Register Tabs -->
+            <div id="auth-tabs-container">
+                <div class="auth-tabs">
+                    <button class="auth-tab active" data-tab="login">Вход</button>
+                    <button class="auth-tab" data-tab="register">Регистрация</button>
+                </div>
+
+                <!-- Login Form -->
+                <form id="login-form">
+                    <div class="form-group">
+                        <label for="login-email">Email</label>
+                        <div class="input-with-icon">
+                            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                                <polyline points="22,6 12,13 2,6"/>
+                            </svg>
+                            <input type="email" id="login-email" class="form-input" placeholder="your@email.com" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">Пароль</label>
+                        <div class="input-with-icon">
+                            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                            </svg>
+                            <input type="password" id="login-password" class="form-input" placeholder="••••••••" required>
+                            <button type="button" class="password-toggle" onclick="togglePassword('login-password')">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                    <circle cx="12" cy="12" r="3"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <span>Войти</span>
+                    </button>
+                    <div class="auth-footer">
+                        <a href="#" class="auth-link" onclick="showForgotPassword(event)">Забыли пароль?</a>
+                    </div>
+                </form>
+
+                <!-- Register Form -->
+                <form id="register-form" class="hidden">
+                    <div class="form-group">
+                        <label for="register-name">Имя</label>
+                        <div class="input-with-icon">
+                            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                <circle cx="12" cy="7" r="4"/>
+                            </svg>
+                            <input type="text" id="register-name" class="form-input" placeholder="Иван Иванов" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="register-email">Email</label>
+                        <div class="input-with-icon">
+                            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                                <polyline points="22,6 12,13 2,6"/>
+                            </svg>
+                            <input type="email" id="register-email" class="form-input" placeholder="your@email.com" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="register-phone">Телефон (необязательно)</label>
+                        <div class="input-with-icon">
+                            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+                            </svg>
+                            <input type="tel" id="register-phone" class="form-input" placeholder="+7 (999) 123-45-67">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="register-password">Пароль</label>
+                        <div class="input-with-icon">
+                            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                            </svg>
+                            <input type="password" id="register-password" class="form-input" placeholder="Минимум 6 символов" required minlength="6">
+                            <button type="button" class="password-toggle" onclick="togglePassword('register-password')">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                    <circle cx="12" cy="12" r="3"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <span>Зарегистрироваться</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Forgot Password Form -->
+            <div id="forgot-password-container" class="hidden">
+                <form id="forgot-password-form">
+                    <div class="form-group">
+                        <label for="forgot-email">Email</label>
+                        <div class="input-with-icon">
+                            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                                <polyline points="22,6 12,13 2,6"/>
+                            </svg>
+                            <input type="email" id="forgot-email" class="form-input" placeholder="your@email.com" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <span>Отправить инструкции</span>
+                    </button>
+                    <div class="auth-footer">
+                        <a href="#" class="auth-link" onclick="showLogin(event)">← Вернуться ко входу</a>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Reset Password Form -->
+            <div id="reset-password-container" class="hidden">
+                <form id="reset-password-form">
+                    <div class="form-group">
+                        <label for="reset-token">Токен восстановления</label>
+                        <div class="input-with-icon">
+                            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+                            </svg>
+                            <input type="text" id="reset-token" class="form-input" placeholder="Вставьте токен из письма" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="reset-new-password">Новый пароль</label>
+                        <div class="input-with-icon">
+                            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                            </svg>
+                            <input type="password" id="reset-new-password" class="form-input" placeholder="Минимум 6 символов" required minlength="6">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <span>Сменить пароль</span>
+                    </button>
+                    <div class="auth-footer">
+                        <a href="#" class="auth-link" onclick="showLogin(event)">← Вернуться ко входу</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard View -->
+    <div id="dashboard-view" class="app-container hidden">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-logo">
+                <h2>⚖️ ChronoLegal</h2>
+            </div>
+
+            <nav class="sidebar-nav">
+                <button class="nav-item active" data-page="dashboard">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="7" height="7"/>
+                        <rect x="14" y="3" width="7" height="7"/>
+                        <rect x="14" y="14" width="7" height="7"/>
+                        <rect x="3" y="14" width="7" height="7"/>
+                    </svg>
+                    Панель управления
+                </button>
+                <button class="nav-item" data-page="users" id="nav-users">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                        <circle cx="9" cy="7" r="4"/>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    </svg>
+                    Пользователи
+                </button>
+                <button class="nav-item" data-page="settings">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                    </svg>
+                    Настройки
+                </button>
+            </nav>
+
+            <div class="sidebar-user">
+                <div class="user-info">
+                    <div class="user-avatar" id="user-avatar">A</div>
+                    <div class="user-details">
+                        <div class="user-name" id="user-name">Пользователь</div>
+                        <span class="user-role role-client" id="user-role-badge">client</span>
+                    </div>
+                </div>
+                <button class="nav-item" style="margin-top: 0.75rem;" onclick="logout()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                        <polyline points="16 17 21 12 16 7"/>
+                        <line x1="21" y1="12" x2="9" y2="12"/>
+                    </svg>
+                    Выйти
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Dashboard Page -->
+            <div id="page-dashboard" class="page">
+                <div class="page-header">
+                    <h1 class="page-title">Панель управления</h1>
+                </div>
+
+                <div class="stats-grid" id="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon admin">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                <path d="M2 17l10 5 10-5"/>
+                                <path d="M2 12l10 5 10-5"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="stat-value" id="stat-admin">0</div>
+                            <div class="stat-label">Администраторы</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon manager">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                                <circle cx="9" cy="7" r="4"/>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="stat-value" id="stat-manager">0</div>
+                            <div class="stat-label">Менеджеры</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon editor">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="stat-value" id="stat-editor">0</div>
+                            <div class="stat-label">Редакторы</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon client">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                <circle cx="12" cy="7" r="4"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="stat-value" id="stat-client">0</div>
+                            <div class="stat-label">Клиенты</div>
+                        </div>
+                    </div>
+                </div>
 
         <div class="card">
-            <h2>📡 Статус API</h2>
-            <div id="api-status" class="api-info">Проверка подключения...</div>
+                    <div class="card-header">
+                        <h3 class="card-title">Добро пожаловать!</h3>
+                    </div>
+                    <p style="color: var(--text-secondary);">
+                        Вы вошли в систему ChronoLegal. Используйте меню слева для навигации.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Users Page -->
+            <div id="page-users" class="page hidden">
+                <div class="page-header">
+                    <h1 class="page-title">Пользователи</h1>
+                    <button class="btn btn-primary" onclick="openCreateUserModal()" id="btn-create-user">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"/>
+                            <line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                        Добавить пользователя
+                    </button>
         </div>
 
         <div class="card">
-            <h2>➕ Добавить пользователя</h2>
+                    <div class="card-header">
+                        <h3 class="card-title">Список пользователей</h3>
+                        <select class="form-select" style="width: auto;" id="filter-role" onchange="loadUsers()">
+                            <option value="">Все роли</option>
+                            <option value="admin">Администраторы</option>
+                            <option value="manager">Менеджеры</option>
+                            <option value="editor">Редакторы</option>
+                            <option value="client">Клиенты</option>
+                        </select>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Пользователь</th>
+                                    <th>Email</th>
+                                    <th>Роль</th>
+                                    <th>Статус</th>
+                                    <th>Последний вход</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-table-body">
+                                <tr>
+                                    <td colspan="6" style="text-align: center; color: var(--text-secondary);">
+                                        Загрузка...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Page -->
+            <div id="page-settings" class="page hidden">
+                <div class="page-header">
+                    <h1 class="page-title">Настройки</h1>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Смена пароля</h3>
+                    </div>
+                    <form id="change-password-form" style="max-width: 400px;">
+                        <div id="password-change-status"></div>
+                        <div class="form-group">
+                            <label for="current-password">Текущий пароль</label>
+                            <input type="password" id="current-password" class="form-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="new-password">Новый пароль</label>
+                            <input type="password" id="new-password" class="form-input" required minlength="6">
+                        </div>
+                        <div class="form-group">
+                            <label for="confirm-password">Подтвердите пароль</label>
+                            <input type="password" id="confirm-password" class="form-input" required minlength="6">
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width: auto;">
+                            Сменить пароль
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Create/Edit User Modal -->
+    <div class="modal-overlay" id="user-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modal-title">Новый пользователь</h3>
+                <button class="modal-close" onclick="closeUserModal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
             <form id="user-form">
+                <div id="modal-status"></div>
+                <input type="hidden" id="edit-user-id">
                 <div class="form-group">
-                    <label for="name">Имя</label>
-                    <input type="text" id="name" placeholder="Введите имя" required>
+                    <label for="user-name">Имя</label>
+                    <input type="text" id="user-name" class="form-input" required>
                 </div>
                 <div class="form-group">
-                    <label for="email">Email</label>
-                    <input type="email" id="email" placeholder="Введите email" required>
+                    <label for="user-email">Email</label>
+                    <input type="email" id="user-email" class="form-input" required>
                 </div>
-                <button type="submit">Добавить</button>
+                <div class="form-group">
+                    <label for="user-phone">Телефон</label>
+                    <input type="tel" id="user-phone" class="form-input">
+                </div>
+                <div class="form-group" id="password-group">
+                    <label for="user-password">Пароль</label>
+                    <input type="password" id="user-password" class="form-input" minlength="6">
+                </div>
+                <div class="form-group">
+                    <label for="user-role">Роль</label>
+                    <select id="user-role" class="form-select">
+                        <option value="client">Клиент</option>
+                        <option value="editor">Редактор</option>
+                        <option value="manager">Менеджер</option>
+                        <option value="admin">Администратор</option>
+                    </select>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeUserModal()">Отмена</button>
+                    <button type="submit" class="btn btn-primary" style="width: auto;">Сохранить</button>
+                </div>
             </form>
-            <div id="form-status"></div>
+        </div>
         </div>
 
-        <div class="card">
-            <h2>👥 Пользователи</h2>
-            <ul id="users-list" class="users-list">
-                <li class="empty-state">Загрузка...</li>
-            </ul>
+    <!-- Change Role Modal -->
+    <div class="modal-overlay" id="role-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">Изменить роль</h3>
+                <button class="modal-close" onclick="closeRoleModal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+            <form id="role-form">
+                <div id="role-modal-status"></div>
+                <input type="hidden" id="role-user-id">
+                <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                    Пользователь: <strong id="role-user-name"></strong>
+                </p>
+                <div class="form-group">
+                    <label for="new-role">Новая роль</label>
+                    <select id="new-role" class="form-select">
+                        <option value="client">Клиент</option>
+                        <option value="editor">Редактор</option>
+                        <option value="manager">Менеджер</option>
+                        <option value="admin">Администратор</option>
+                    </select>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeRoleModal()">Отмена</button>
+                    <button type="submit" class="btn btn-primary" style="width: auto;">Сохранить</button>
+                </div>
+            </form>
         </div>
     </div>
 
     <script>
+        // ============ CONFIGURATION ============
         const API_BASE = '/api';
+        const AUTH_BASE = '/api/auth';
 
-        // Проверка статуса API
-        async function checkApiStatus() {
-            const statusEl = document.getElementById('api-status');
-            try {
-                const response = await fetch(`${API_BASE}/`);
-                const data = await response.json();
-                statusEl.innerHTML = `✅ API подключен<br>Сообщение: ${data.message}<br>Время: ${data.timestamp}`;
-            } catch (error) {
-                statusEl.innerHTML = `❌ Ошибка подключения: ${error.message}`;
+        // ============ STATE ============
+        let currentUser = null;
+        let authToken = localStorage.getItem('authToken');
+
+        // ============ UTILITY FUNCTIONS ============
+        function showStatus(containerId, message, type) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            container.innerHTML = `
+                <div class="status-message status-${type}">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        ${type === 'success' 
+                            ? '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>'
+                            : '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>'}
+                    </svg>
+                    ${message}
+                </div>
+            `;
+            if (type === 'success') {
+                setTimeout(() => container.innerHTML = '', 3000);
             }
         }
 
-        // Загрузка пользователей
-        async function loadUsers() {
-            const listEl = document.getElementById('users-list');
+        function clearStatus(containerId) {
+            const container = document.getElementById(containerId);
+            if (container) container.innerHTML = '';
+        }
+
+        async function apiRequest(url, options = {}) {
+            const headers = {
+                'Content-Type': 'application/json',
+                ...options.headers
+            };
+
+            if (authToken) {
+                headers['Authorization'] = `Bearer ${authToken}`;
+            }
+
+            const response = await fetch(url, { ...options, headers });
+                const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Ошибка запроса');
+            }
+
+            return data;
+        }
+
+        function togglePassword(inputId) {
+            const input = document.getElementById(inputId);
+            input.type = input.type === 'password' ? 'text' : 'password';
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '—';
+            return new Date(dateStr).toLocaleDateString('ru-RU', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        // ============ AUTH FUNCTIONS ============
+        function showView(viewId) {
+            document.querySelectorAll('[id$="-view"]').forEach(v => v.classList.add('hidden'));
+            document.getElementById(viewId).classList.remove('hidden');
+        }
+
+        function showAuthTab(tab) {
+            document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+            document.getElementById('login-form').classList.toggle('hidden', tab !== 'login');
+            document.getElementById('register-form').classList.toggle('hidden', tab !== 'register');
+        }
+
+        function showForgotPassword(e) {
+            e.preventDefault();
+            document.getElementById('auth-tabs-container').classList.add('hidden');
+            document.getElementById('forgot-password-container').classList.remove('hidden');
+            document.getElementById('reset-password-container').classList.add('hidden');
+            clearStatus('auth-status');
+        }
+
+        function showResetPassword() {
+            document.getElementById('auth-tabs-container').classList.add('hidden');
+            document.getElementById('forgot-password-container').classList.add('hidden');
+            document.getElementById('reset-password-container').classList.remove('hidden');
+            clearStatus('auth-status');
+        }
+
+        function showLogin(e) {
+            if (e) e.preventDefault();
+            document.getElementById('auth-tabs-container').classList.remove('hidden');
+            document.getElementById('forgot-password-container').classList.add('hidden');
+            document.getElementById('reset-password-container').classList.add('hidden');
+            showAuthTab('login');
+            clearStatus('auth-status');
+        }
+
+        async function login(email, password) {
+            const data = await apiRequest(`${AUTH_BASE}/login`, {
+                method: 'POST',
+                body: JSON.stringify({ email, password })
+            });
+
+            authToken = data.token;
+            localStorage.setItem('authToken', authToken);
+            currentUser = data.user;
+            
+            showDashboard();
+        }
+
+        async function register(name, email, password, phone) {
+            const data = await apiRequest(`${AUTH_BASE}/register`, {
+                method: 'POST',
+                body: JSON.stringify({ name, email, password, phone })
+            });
+
+            authToken = data.token;
+            localStorage.setItem('authToken', authToken);
+            currentUser = data.user;
+            
+            showDashboard();
+        }
+
+        async function forgotPassword(email) {
+            const data = await apiRequest(`${AUTH_BASE}/forgot-password`, {
+                method: 'POST',
+                body: JSON.stringify({ email })
+            });
+
+            showStatus('auth-status', 'Инструкции отправлены на email', 'success');
+            
+            // For demo: show reset form with token
+            if (data._dev_reset_token) {
+                setTimeout(() => {
+                    showResetPassword();
+                    document.getElementById('reset-token').value = data._dev_reset_token;
+                }, 1500);
+            }
+        }
+
+        async function resetPassword(token, newPassword) {
+            await apiRequest(`${AUTH_BASE}/reset-password`, {
+                method: 'POST',
+                body: JSON.stringify({ token, newPassword })
+            });
+
+            showStatus('auth-status', 'Пароль успешно изменён', 'success');
+            setTimeout(() => showLogin(), 1500);
+        }
+
+        function logout() {
+            authToken = null;
+            currentUser = null;
+            localStorage.removeItem('authToken');
+            showView('auth-view');
+            showLogin();
+        }
+
+        async function checkAuth() {
+            if (!authToken) {
+                showView('auth-view');
+                return;
+            }
+
             try {
-                const response = await fetch(`${API_BASE}/users`);
-                const users = await response.json();
+                const data = await apiRequest(`${AUTH_BASE}/me`);
+                currentUser = data.user;
+                showDashboard();
+            } catch (err) {
+                logout();
+            }
+        }
+
+        // ============ DASHBOARD FUNCTIONS ============
+        function showDashboard() {
+            showView('dashboard-view');
+            updateUserInfo();
+            updateUIForRole();
+            loadStats();
+            showPage('dashboard');
+        }
+
+        function updateUserInfo() {
+            if (!currentUser) return;
+
+            document.getElementById('user-name').textContent = currentUser.name;
+            document.getElementById('user-avatar').textContent = currentUser.name.charAt(0).toUpperCase();
+            
+            const roleBadge = document.getElementById('user-role-badge');
+            roleBadge.textContent = currentUser.role;
+            roleBadge.className = `user-role role-${currentUser.role}`;
+        }
+
+        function updateUIForRole() {
+            const isAdminOrManager = ['admin', 'manager'].includes(currentUser?.role);
+            
+            // Show/hide users nav
+            document.getElementById('nav-users').style.display = isAdminOrManager ? 'flex' : 'none';
+            
+            // Show/hide create user button
+            const createBtn = document.getElementById('btn-create-user');
+            if (createBtn) {
+                createBtn.style.display = isAdminOrManager ? 'inline-flex' : 'none';
+            }
+
+            // Restrict role options for manager
+            if (currentUser?.role === 'manager') {
+                const roleOptions = document.querySelectorAll('#user-role option, #new-role option');
+                roleOptions.forEach(opt => {
+                    if (opt.value === 'admin' || opt.value === 'manager') {
+                        opt.disabled = true;
+                    }
+                });
+            }
+        }
+
+        function showPage(pageId) {
+            document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
+            document.getElementById(`page-${pageId}`).classList.remove('hidden');
+            
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.querySelector(`[data-page="${pageId}"]`)?.classList.add('active');
+
+            if (pageId === 'users') {
+                loadUsers();
+            }
+        }
+
+        async function loadStats() {
+            if (!['admin', 'manager'].includes(currentUser?.role)) {
+                document.getElementById('stats-grid').style.display = 'none';
+                return;
+            }
+
+            document.getElementById('stats-grid').style.display = 'grid';
+
+            try {
+                const users = await apiRequest(`${AUTH_BASE}/users`);
+                
+                const stats = { admin: 0, manager: 0, editor: 0, client: 0 };
+                users.forEach(u => {
+                    if (stats.hasOwnProperty(u.role)) {
+                        stats[u.role]++;
+                    }
+                });
+
+                document.getElementById('stat-admin').textContent = stats.admin;
+                document.getElementById('stat-manager').textContent = stats.manager;
+                document.getElementById('stat-editor').textContent = stats.editor;
+                document.getElementById('stat-client').textContent = stats.client;
+            } catch (err) {
+                console.error('Failed to load stats:', err);
+            }
+        }
+
+        async function loadUsers() {
+            const roleFilter = document.getElementById('filter-role').value;
+            const url = roleFilter 
+                ? `${AUTH_BASE}/users?role=${roleFilter}`
+                : `${AUTH_BASE}/users`;
+
+            try {
+                const users = await apiRequest(url);
+                renderUsersTable(users);
+            } catch (err) {
+                document.getElementById('users-table-body').innerHTML = `
+                    <tr>
+                        <td colspan="6" style="text-align: center; color: var(--error);">
+                            Ошибка загрузки: ${err.message}
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
+        function renderUsersTable(users) {
+            const tbody = document.getElementById('users-table-body');
                 
                 if (users.length === 0) {
-                    listEl.innerHTML = '<li class="empty-state">Пользователей пока нет</li>';
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" style="text-align: center; color: var(--text-secondary);">
+                            Пользователи не найдены
+                        </td>
+                    </tr>
+                `;
                     return;
                 }
 
-                listEl.innerHTML = users.map(user => `
-                    <li>
-                        <div>
-                            <span class="user-name">${user.name}</span>
-                            <br>
-                            <span class="user-email">${user.email}</span>
+            tbody.innerHTML = users.map(user => `
+                <tr>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <div class="user-avatar" style="width: 36px; height: 36px; font-size: 0.85rem;">
+                                ${user.name.charAt(0).toUpperCase()}
                         </div>
-                        <span style="color: #666; font-size: 0.8rem">ID: ${user.id}</span>
-                    </li>
+                            <span>${user.name}</span>
+                        </div>
+                    </td>
+                    <td style="color: var(--text-secondary);">${user.email}</td>
+                    <td>
+                        <span class="user-role role-${user.role}">${user.role}</span>
+                    </td>
+                    <td>
+                        <span class="status-badge ${user.is_active ? 'status-active' : 'status-inactive'}">
+                            <span style="width: 6px; height: 6px; border-radius: 50%; background: currentColor;"></span>
+                            ${user.is_active ? 'Активен' : 'Неактивен'}
+                        </span>
+                    </td>
+                    <td style="color: var(--text-secondary);">${formatDate(user.last_login)}</td>
+                    <td>
+                        ${currentUser?.role === 'admin' && user.id !== currentUser.id ? `
+                            <button class="action-btn" title="Изменить роль" onclick="openRoleModal(${user.id}, '${user.name}', '${user.role}')">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                </svg>
+                            </button>
+                            <button class="action-btn ${user.is_active ? 'danger' : ''}" title="${user.is_active ? 'Деактивировать' : 'Активировать'}" onclick="toggleUserStatus(${user.id}, ${!user.is_active})">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    ${user.is_active 
+                                        ? '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>'
+                                        : '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>'}
+                                </svg>
+                            </button>
+                        ` : '—'}
+                    </td>
+                </tr>
                 `).join('');
-            } catch (error) {
-                listEl.innerHTML = `<li class="empty-state">Ошибка загрузки: ${error.message}</li>`;
+        }
+
+        // ============ USER MODAL FUNCTIONS ============
+        function openCreateUserModal() {
+            document.getElementById('modal-title').textContent = 'Новый пользователь';
+            document.getElementById('user-form').reset();
+            document.getElementById('edit-user-id').value = '';
+            document.getElementById('password-group').style.display = 'block';
+            document.getElementById('user-password').required = true;
+            document.getElementById('user-modal').classList.add('active');
+            clearStatus('modal-status');
+        }
+
+        function closeUserModal() {
+            document.getElementById('user-modal').classList.remove('active');
+        }
+
+        function openRoleModal(userId, userName, currentRole) {
+            document.getElementById('role-user-id').value = userId;
+            document.getElementById('role-user-name').textContent = userName;
+            document.getElementById('new-role').value = currentRole;
+            document.getElementById('role-modal').classList.add('active');
+            clearStatus('role-modal-status');
+        }
+
+        function closeRoleModal() {
+            document.getElementById('role-modal').classList.remove('active');
+        }
+
+        async function toggleUserStatus(userId, newStatus) {
+            try {
+                await apiRequest(`${AUTH_BASE}/users/${userId}/status`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ is_active: newStatus })
+                });
+                loadUsers();
+                loadStats();
+            } catch (err) {
+                alert('Ошибка: ' + err.message);
             }
         }
 
-        // Добавление пользователя
-        document.getElementById('user-form').addEventListener('submit', async (e) => {
+        // ============ EVENT LISTENERS ============
+        document.addEventListener('DOMContentLoaded', () => {
+            // Auth tabs
+            document.querySelectorAll('.auth-tab').forEach(tab => {
+                tab.addEventListener('click', () => showAuthTab(tab.dataset.tab));
+            });
+
+            // Navigation
+            document.querySelectorAll('.nav-item[data-page]').forEach(nav => {
+                nav.addEventListener('click', () => showPage(nav.dataset.page));
+            });
+
+            // Login form
+            document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const statusEl = document.getElementById('form-status');
-            const name = document.getElementById('name').value;
-            const email = document.getElementById('email').value;
-
-            try {
-                const response = await fetch(`${API_BASE}/users`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, email })
-                });
-
-                if (response.ok) {
-                    statusEl.innerHTML = '<div class="status success">✅ Пользователь добавлен!</div>';
-                    document.getElementById('name').value = '';
-                    document.getElementById('email').value = '';
-                    loadUsers();
-                } else {
-                    throw new Error('Ошибка сервера');
+                clearStatus('auth-status');
+                
+                try {
+                    await login(
+                        document.getElementById('login-email').value,
+                        document.getElementById('login-password').value
+                    );
+                } catch (err) {
+                    showStatus('auth-status', err.message, 'error');
                 }
-            } catch (error) {
-                statusEl.innerHTML = `<div class="status error">❌ ${error.message}</div>`;
-            }
+            });
 
-            setTimeout(() => statusEl.innerHTML = '', 3000);
-        });
+            // Register form
+            document.getElementById('register-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                clearStatus('auth-status');
+                
+                try {
+                    await register(
+                        document.getElementById('register-name').value,
+                        document.getElementById('register-email').value,
+                        document.getElementById('register-password').value,
+                        document.getElementById('register-phone').value
+                    );
+                } catch (err) {
+                    showStatus('auth-status', err.message, 'error');
+                }
+            });
 
-        // Инициализация
-        checkApiStatus();
+            // Forgot password form
+            document.getElementById('forgot-password-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                clearStatus('auth-status');
+                
+                try {
+                    await forgotPassword(document.getElementById('forgot-email').value);
+                } catch (err) {
+                    showStatus('auth-status', err.message, 'error');
+                }
+            });
+
+            // Reset password form
+            document.getElementById('reset-password-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                clearStatus('auth-status');
+                
+                try {
+                    await resetPassword(
+                        document.getElementById('reset-token').value,
+                        document.getElementById('reset-new-password').value
+                    );
+                } catch (err) {
+                    showStatus('auth-status', err.message, 'error');
+                }
+            });
+
+            // Change password form
+            document.getElementById('change-password-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                clearStatus('password-change-status');
+
+                const newPass = document.getElementById('new-password').value;
+                const confirmPass = document.getElementById('confirm-password').value;
+
+                if (newPass !== confirmPass) {
+                    showStatus('password-change-status', 'Пароли не совпадают', 'error');
+                    return;
+                }
+
+                try {
+                    await apiRequest(`${AUTH_BASE}/change-password`, {
+                    method: 'POST',
+                        body: JSON.stringify({
+                            currentPassword: document.getElementById('current-password').value,
+                            newPassword: newPass
+                        })
+                    });
+                    showStatus('password-change-status', 'Пароль успешно изменён', 'success');
+                    e.target.reset();
+                } catch (err) {
+                    showStatus('password-change-status', err.message, 'error');
+                }
+            });
+
+            // Create user form
+            document.getElementById('user-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                clearStatus('modal-status');
+
+                const userId = document.getElementById('edit-user-id').value;
+                const name = document.getElementById('user-name').value.trim();
+                const email = document.getElementById('user-email').value.trim();
+                const phone = document.getElementById('user-phone').value.trim();
+                const role = document.getElementById('user-role').value;
+                const password = document.getElementById('user-password').value;
+
+                // Validate required fields for new user
+                if (!userId) {
+                    if (!name || !email || !password) {
+                        showStatus('modal-status', 'Имя, email и пароль обязательны', 'error');
+                        return;
+                    }
+                    if (password.length < 6) {
+                        showStatus('modal-status', 'Пароль должен быть не менее 6 символов', 'error');
+                        return;
+                    }
+                }
+
+                const userData = { name, email, phone, role, password };
+
+                try {
+                    if (userId) {
+                        // Edit user - not implemented yet
+                    } else {
+                        await apiRequest(`${AUTH_BASE}/users`, {
+                            method: 'POST',
+                            body: JSON.stringify(userData)
+                        });
+                    }
+                    closeUserModal();
+                    loadUsers();
+                    loadStats();
+                } catch (err) {
+                    showStatus('modal-status', err.message, 'error');
+                }
+            });
+
+            // Change role form
+            document.getElementById('role-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                clearStatus('role-modal-status');
+
+                const userId = document.getElementById('role-user-id').value;
+                const newRole = document.getElementById('new-role').value;
+
+                try {
+                    await apiRequest(`${AUTH_BASE}/users/${userId}/role`, {
+                        method: 'PUT',
+                        body: JSON.stringify({ role: newRole })
+                    });
+                    closeRoleModal();
         loadUsers();
+                    loadStats();
+                } catch (err) {
+                    showStatus('role-modal-status', err.message, 'error');
+                }
+            });
+
+            // Check auth on load
+            checkAuth();
+        });
     </script>
 </body>
 </html>
-
