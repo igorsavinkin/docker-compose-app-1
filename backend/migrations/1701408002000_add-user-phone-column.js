@@ -20,3 +20,4 @@ exports.down = (pgm) => {
   pgm.dropColumn('users', 'phone');
 };
 
+
