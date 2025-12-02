@@ -86,8 +86,9 @@ curl http://localhost/api/users
 
 | Сервис | URL | Описание |
 |--------|-----|----------|
-| Frontend | http://localhost | Веб-интерфейс |
-| API (nginx) | http://localhost/api/users | API через прокси |
+| Frontend (HTTP) | http://localhost:8080 | Веб-интерфейс |
+| Frontend (HTTPS) | https://localhost:8443 | Веб-интерфейс (SSL) |
+| API (nginx) | http://localhost:8080/api/users | API через прокси |
 | API (direct) | http://localhost:3000/users | API напрямую |
 | Prometheus | http://localhost:9090 | Метрики |
 | Grafana | http://localhost:3001 | Дашборды (admin/admin) |
@@ -122,8 +123,8 @@ sudo reboot
 
 ```bash
 # Открыть необходимые порты
-sudo ufw allow 80/tcp    # HTTP (nginx)
-sudo ufw allow 443/tcp   # HTTPS (если настроен SSL)
+sudo ufw allow 8080/tcp   # HTTP (nginx)
+sudo ufw allow 8443/tcp   # HTTPS (nginx с SSL)
 sudo ufw enable
 ```
 
@@ -200,53 +201,127 @@ docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 
 ### Настройка HTTPS (SSL/TLS)
 
-#### Вариант 1: Let's Encrypt с Certbot
+Приложение использует порты **8080** (HTTP) и **8443** (HTTPS), чтобы не конфликтовать с другими сервисами на стандартных портах 80/443.
+
+#### Вариант 1: Использование существующего SSL-сертификата (FastPanel / Let's Encrypt)
+
+Если у вас уже есть SSL-сертификат (например, от FastPanel), используйте его:
+
+**Шаг 1: Найти сертификаты на сервере**
 
 ```bash
-# Установка certbot
-sudo apt install certbot -y
+# FastPanel обычно хранит сертификаты здесь:
+ls -la /var/www/httpd-cert/yourdomain.com*
 
-# Получение сертификата
-sudo certbot certonly --standalone -d yourdomain.com
-
-# Сертификаты будут в /etc/letsencrypt/live/yourdomain.com/
+# Стандартный Let's Encrypt:
+ls -la /etc/letsencrypt/live/yourdomain.com/
 ```
 
-#### Вариант 2: Обновление nginx.conf для HTTPS
+**Шаг 2: Настроить docker-compose.yml**
 
-```nginx
-# nginx/nginx.conf (пример для HTTPS)
-events {
-    worker_connections 1024;
-}
+Замените пути к сертификатам в разделе nginx volumes:
 
-http {
-    server {
-        listen 80;
-        server_name yourdomain.com;
-        return 301 https://$server_name$request_uri;
-    }
-
-    server {
-        listen 443 ssl http2;
-        server_name yourdomain.com;
-
-        ssl_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
-        ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
-
-        location / {
-            root /usr/share/nginx/html;
-            index index.html;
-        }
-
-        location /api/ {
-            proxy_pass http://backend:3000/;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-        }
-    }
-}
+```yaml
+nginx:
+  volumes:
+    - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    - ./frontend:/usr/share/nginx/html:ro
+    # Для FastPanel (замените путь на ваш):
+    - /var/www/httpd-cert/yourdomain.com_XXXXX.crt:/etc/nginx/ssl/fullchain.pem:ro
+    - /var/www/httpd-cert/yourdomain.com_XXXXX.key:/etc/nginx/ssl/privkey.pem:ro
+    # Или для стандартного Let's Encrypt:
+    # - /etc/letsencrypt/live/yourdomain.com:/etc/nginx/ssl:ro
 ```
+
+**Шаг 3: Включить SSL-конфигурацию nginx**
+
+```bash
+cp nginx/nginx-ssl.conf nginx/nginx.conf
+```
+
+**Шаг 4: Перезапустить nginx**
+
+```bash
+docker compose restart nginx
+```
+
+#### Вариант 2: Самоподписанный сертификат (для разработки)
+
+```bash
+# Linux/macOS
+chmod +x ssl/generate-self-signed.sh
+./ssl/generate-self-signed.sh yourdomain.com
+
+# Windows (PowerShell)
+.\ssl\generate-self-signed.ps1 -Domain "yourdomain.com"
+```
+
+#### Автоматическое обновление сертификатов FastPanel
+
+При обновлении сертификата FastPanel меняет имя файла. Используйте скрипт автообновления:
+
+```bash
+# Сделать скрипт исполняемым
+chmod +x ssl/update-cert.sh
+
+# Запустить вручную
+sudo ./ssl/update-cert.sh
+
+# Добавить в cron для автоматического обновления (каждый день в 3:00)
+sudo crontab -e
+# Добавить строку:
+0 3 * * * /path/to/project/ssl/update-cert.sh >> /var/log/cert-update.log 2>&1
+```
+
+#### Использование с Cloudflare
+
+Если вы используете Cloudflare как CDN/proxy:
+
+**1. Настройка DNS в Cloudflare:**
+- Добавьте A-запись: `yourdomain.com` → IP вашего сервера
+- Включите проксирование (оранжевое облако)
+
+**2. Настройка SSL в Cloudflare:**
+- SSL/TLS → Overview → выберите **Full** или **Full (strict)**
+- Cloudflare поддерживает порт 8443 для HTTPS
+
+**3. Открыть порт 8443 на сервере:**
+
+```bash
+sudo ufw allow 8443/tcp
+```
+
+**4. Проверить доступность:**
+
+```bash
+# Локально на сервере
+curl -k https://localhost:8443
+
+# Через Cloudflare
+curl https://yourdomain.com:8443
+```
+
+#### Проверка SSL-сертификата
+
+```bash
+# Проверить статус сертификата
+./ssl/check-cert.sh
+
+# Проверить работу HTTPS
+curl -k https://localhost:8443
+docker exec <nginx-container> wget -q --spider --no-check-certificate https://localhost:8443
+```
+
+#### Порты с SSL
+
+| Порт | Описание |
+|------|----------|
+| 8080 | HTTP (редирект на HTTPS) |
+| 8443 | HTTPS |
+| 3000 | Backend API (прямой доступ) |
+| 3001 | Grafana |
+| 5432 | PostgreSQL |
+| 9090 | Prometheus |
 
 ---
 
@@ -261,7 +336,8 @@ http {
 | `DB_NAME` | mydb | Имя базы данных |
 | `DB_USER` | user | Пользователь БД |
 | `DB_PASSWORD` | password | Пароль БД |
-| `NGINX_PORT` | 80 | Внешний порт nginx |
+| `NGINX_PORT` | 8080 | HTTP порт nginx |
+| `NGINX_SSL_PORT` | 8443 | HTTPS порт nginx |
 | `BACKEND_PORT` | 3000 | Порт backend API |
 | `POSTGRES_PORT` | 5432 | Внешний порт PostgreSQL |
 | `LOG_LEVEL` | info | Уровень логирования |
