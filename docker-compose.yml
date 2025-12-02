@@ -2,20 +2,25 @@ services:
   nginx:
     image: nginx:alpine
     ports:
-      - "${NGINX_PORT:-80}:80"
+      - "${NGINX_PORT:-8080}:8080"
+      - "${NGINX_SSL_PORT:-8443}:8443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./frontend:/usr/share/nginx/html:ro
+      # FastPanel SSL certificates for webscraping.pro
+      - /var/www/httpd-cert/webscraping.pro_2025-03-31-23-31_31.crt:/etc/nginx/ssl/fullchain.pem:ro
+      - /var/www/httpd-cert/webscraping.pro_2025-03-31-23-31_31.key:/etc/nginx/ssl/privkey.pem:ro
     depends_on:
       backend:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
+    command: '/bin/sh -c ''while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g "daemon off;"'''
 
   backend:
     build: ./backend

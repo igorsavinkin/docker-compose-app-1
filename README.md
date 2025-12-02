@@ -16,7 +16,14 @@ A simple REST API application built with Node.js, Express, and PostgreSQL, fully
 ├── common/
 │   └── project-containers.png
 ├── nginx/
-│   └── nginx.conf            # Конфигурация nginx
+│   ├── nginx.conf            # Конфигурация nginx (HTTP)
+│   └── nginx-ssl.conf        # Конфигурация nginx (HTTPS)
+├── ssl/
+│   ├── generate-self-signed.sh   # Self-signed cert (Linux/macOS)
+│   ├── generate-self-signed.ps1  # Self-signed cert (Windows)
+│   ├── init-letsencrypt.sh       # Let's Encrypt (Linux/macOS)
+│   └── init-letsencrypt.ps1      # Let's Encrypt (Windows)
+├── certbot/                  # SSL certificates (auto-created)
 ├── frontend/
 │   └── index.html            # Статический фронтенд
 ├── monitoring/               # Логирование и мониторинг
@@ -69,8 +76,8 @@ docker-compose up --build
 ```
 
 После запуска:
-- **Веб-интерфейс:** http://localhost (nginx)
-- **API через nginx:** http://localhost/api/users
+- **Веб-интерфейс:** http://localhost:8080 (nginx)
+- **API через nginx:** http://localhost:8080/api/users
 - **API напрямую:** http://localhost:3000/users
 - **Prometheus:** http://localhost:9090
 - **Grafana:** http://localhost:3001 (admin/admin)
@@ -150,7 +157,7 @@ SELECT * FROM pgmigrations ORDER BY run_on;
 Nginx выполняет две функции:
 
 ### Статические файлы
-Раздаёт файлы из папки `frontend/` на порту **80**
+Раздаёт файлы из папки `frontend/` на порту **8080** (HTTPS на **8443**)
 
 ### Reverse Proxy
 Все запросы `/api/*` проксируются на backend (порт 3000):
@@ -164,7 +171,8 @@ Nginx выполняет две функции:
 
 | Порт | Сервис | Описание |
 |------|--------|----------|
-| 80 | nginx | Веб-интерфейс + API прокси |
+| 8080 | nginx | HTTP: Веб-интерфейс + API прокси |
+| 8443 | nginx | HTTPS: Веб-интерфейс + API прокси |
 | 3000 | backend | Node.js API (прямой доступ) |
 | 3001 | grafana | Мониторинг (визуализация) |
 | 5432 | db | PostgreSQL |
@@ -294,7 +302,8 @@ cp .env.example .env
 | DB_NAME | mydb | Database name |
 | DB_USER | user | Database user |
 | DB_PASSWORD | password | Database password |
-| NGINX_PORT | 80 | Nginx port |
+| NGINX_PORT | 8080 | Nginx HTTP port |
+| NGINX_SSL_PORT | 8443 | Nginx HTTPS port |
 | BACKEND_PORT | 3000 | Backend API port |
 | POSTGRES_PORT | 5432 | PostgreSQL port |
 | LOG_LEVEL | info | Уровень логирования (error/warn/info/http/debug) |
@@ -311,7 +320,7 @@ cp .env.example .env
 |---------|-------|----------|---------|
 | db | `pg_isready` | 10s | 5 |
 | backend | HTTP GET localhost:3000/health | 30s | 3 |
-| nginx | HTTP GET localhost:80 | 30s | 3 |
+| nginx | HTTP GET localhost:8080 | 30s | 3 |
 | prometheus | HTTP GET localhost:9090/-/healthy | 30s | 3 |
 | grafana | HTTP GET localhost:3000/api/health | 30s | 3 |
 
@@ -479,6 +488,120 @@ curl http://localhost:3000/health
 | 9090 | Prometheus | Сбор метрик |
 | 3001 | Grafana | Визуализация |
 | 3000/metrics | Backend | Endpoint метрик |
+
+## SSL/HTTPS Setup
+
+This project supports HTTPS on **port 8443** (HTTP on port 8080) to avoid conflicts with other services.
+
+### Option 1: Self-Signed Certificate (Quick & Easy)
+
+Self-signed certificates provide encryption but browsers will show a warning. Good for development or internal use.
+
+#### Step 1: Generate Certificate
+
+**Windows (PowerShell):**
+```powershell
+.\ssl\generate-self-signed.ps1 -Domain "yourdomain.com"
+```
+
+**Linux/macOS:**
+```bash
+chmod +x ssl/generate-self-signed.sh
+./ssl/generate-self-signed.sh yourdomain.com
+```
+
+#### Step 2: Enable HTTPS in Nginx
+
+```powershell
+# Copy SSL config
+Copy-Item nginx\nginx-ssl.conf nginx\nginx.conf
+
+# Edit and replace YOUR_DOMAIN with your domain
+notepad nginx\nginx.conf
+```
+
+#### Step 3: Restart Nginx
+
+```bash
+docker compose restart nginx
+```
+
+Access your app at `https://yourdomain.com:8443` (accept the browser warning).
+
+---
+
+### Option 2: Let's Encrypt (Free Trusted Certificate)
+
+For publicly trusted certificates without browser warnings.
+
+> **Note:** Let's Encrypt requires port 80 for HTTP challenge. Since port 80 is occupied, you have two options:
+
+#### Option 2a: DNS Challenge (Recommended)
+
+If your DNS provider has an API (Cloudflare, Route53, etc.):
+
+```bash
+# Run certbot with DNS challenge
+docker compose run --rm certbot certonly \
+    --manual \
+    --preferred-challenges dns \
+    -d yourdomain.com \
+    -d www.yourdomain.com
+
+# Follow the prompts to add DNS TXT records
+```
+
+#### Option 2b: Proxy ACME Challenge
+
+Configure your existing app on port 80 to proxy `/.well-known/acme-challenge/` to this app:
+
+```nginx
+# In your existing nginx on port 80
+location /.well-known/acme-challenge/ {
+    proxy_pass http://localhost:8080/.well-known/acme-challenge/;
+}
+```
+
+Then run the Let's Encrypt script:
+
+**Windows:**
+```powershell
+.\ssl\init-letsencrypt.ps1
+```
+
+**Linux/macOS:**
+```bash
+./ssl/init-letsencrypt.sh
+```
+
+---
+
+### SSL Configuration Files
+
+| File | Description |
+|------|-------------|
+| `ssl/generate-self-signed.sh` | Self-signed cert generator (Linux/macOS) |
+| `ssl/generate-self-signed.ps1` | Self-signed cert generator (Windows) |
+| `ssl/init-letsencrypt.sh` | Let's Encrypt script (Linux/macOS) |
+| `ssl/init-letsencrypt.ps1` | Let's Encrypt script (Windows) |
+| `nginx/nginx.conf` | Current nginx config (HTTP on 8080) |
+| `nginx/nginx-ssl.conf` | SSL nginx config (HTTPS on 8443) |
+| `certbot/` | Certificate storage (auto-created, gitignored) |
+
+### Certificate Auto-Renewal
+
+The Certbot container automatically renews Let's Encrypt certificates. It checks every 12 hours, and Nginx reloads every 6 hours.
+
+### Ports
+
+| Port | Service | Description |
+|------|---------|-------------|
+| 8080 | nginx | HTTP |
+| 8443 | nginx | HTTPS |
+| 3000 | backend | Node.js API (direct access) |
+| 3001 | grafana | Monitoring |
+| 5432 | db | PostgreSQL |
+| 9090 | prometheus | Metrics |
 
 ## Development
 
