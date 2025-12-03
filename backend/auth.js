@@ -32,7 +32,7 @@ function createAuthRouter(pool, logger, dbQuery) {
     try {
       const decoded = jwt.verify(token, JWT_SECRET);
       const result = await dbQuery(
-        'SELECT id, name, email, role, is_active FROM users WHERE id = $1',
+        'SELECT id, name, email, role, is_active, manager_id, credits FROM users WHERE id = $1',
         [decoded.userId],
         'get_user_for_auth'
       );
@@ -73,6 +73,23 @@ function createAuthRouter(pool, logger, dbQuery) {
     };
   };
 
+  // === Helper: Auto-assign a manager to new client ===
+  const assignManager = async () => {
+    // Find a manager with the least number of assigned clients
+    const result = await dbQuery(
+      `SELECT u.id 
+       FROM users u 
+       WHERE u.role IN ('manager', 'admin') AND u.is_active = true
+       ORDER BY (
+         SELECT COUNT(*) FROM users c WHERE c.manager_id = u.id
+       ) ASC, u.created_at ASC
+       LIMIT 1`,
+      [],
+      'find_available_manager'
+    );
+    return result.rows.length > 0 ? result.rows[0].id : null;
+  };
+
   // === Регистрация нового пользователя ===
   router.post('/register', async (req, res) => {
     const { name, email, password, phone } = req.body;
@@ -106,12 +123,15 @@ function createAuthRouter(pool, logger, dbQuery) {
       // Хэшируем пароль
       const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
-      // Создаём пользователя с ролью client по умолчанию
+      // Auto-assign a manager to the new client
+      const managerId = await assignManager();
+
+      // Создаём пользователя с ролью client по умолчанию, 10 credits, and assigned manager
       const result = await dbQuery(
-        `INSERT INTO users (name, email, phone, password_hash, role, is_active, created_at)
-         VALUES ($1, $2, $3, $4, 'client', true, CURRENT_TIMESTAMP)
-         RETURNING id, name, email, role, created_at`,
-        [name, email.toLowerCase(), phone || null, passwordHash],
+        `INSERT INTO users (name, email, phone, password_hash, role, is_active, manager_id, credits, created_at)
+         VALUES ($1, $2, $3, $4, 'client', true, $5, 10, CURRENT_TIMESTAMP)
+         RETURNING id, name, email, role, manager_id, credits, created_at`,
+        [name, email.toLowerCase(), phone || null, passwordHash, managerId],
         'register_user'
       );
 
@@ -124,7 +144,12 @@ function createAuthRouter(pool, logger, dbQuery) {
         { expiresIn: JWT_EXPIRES_IN }
       );
 
-      logger.info('Новый пользователь зарегистрирован', { userId: user.id, email: user.email });
+      logger.info('Новый пользователь зарегистрирован', { 
+        userId: user.id, 
+        email: user.email,
+        managerId: user.manager_id,
+        credits: user.credits
+      });
 
       res.status(201).json({
         message: 'Регистрация успешна',
@@ -132,7 +157,9 @@ function createAuthRouter(pool, logger, dbQuery) {
           id: user.id,
           name: user.name,
           email: user.email,
-          role: user.role
+          role: user.role,
+          manager_id: user.manager_id,
+          credits: user.credits
         },
         token
       });
@@ -153,7 +180,7 @@ function createAuthRouter(pool, logger, dbQuery) {
 
     try {
       const result = await dbQuery(
-        'SELECT id, name, email, password_hash, role, is_active FROM users WHERE email = $1',
+        'SELECT id, name, email, password_hash, role, is_active, manager_id, credits FROM users WHERE email = $1',
         [email.toLowerCase()],
         'login_get_user'
       );
@@ -204,7 +231,9 @@ function createAuthRouter(pool, logger, dbQuery) {
           id: user.id,
           name: user.name,
           email: user.email,
-          role: user.role
+          role: user.role,
+          manager_id: user.manager_id,
+          credits: user.credits
         },
         token
       });
@@ -367,15 +396,18 @@ function createAuthRouter(pool, logger, dbQuery) {
     const { role } = req.query;
 
     try {
-      let query = 'SELECT id, name, email, phone, role, is_active, last_login, created_at FROM users';
+      let query = `SELECT u.id, u.name, u.email, u.phone, u.role, u.is_active, u.last_login, u.created_at, 
+                   u.manager_id, u.credits, m.name as manager_name 
+                   FROM users u 
+                   LEFT JOIN users m ON u.manager_id = m.id`;
       let params = [];
 
       if (role) {
-        query += ' WHERE role = $1';
+        query += ' WHERE u.role = $1';
         params.push(role);
       }
 
-      query += ' ORDER BY created_at DESC';
+      query += ' ORDER BY u.created_at DESC';
 
       const result = await dbQuery(query, params, 'admin_get_users');
       
@@ -480,6 +512,137 @@ function createAuthRouter(pool, logger, dbQuery) {
 
     } catch (err) {
       logger.error('Ошибка изменения статуса', { targetUserId: id, error: err.message });
+      res.status(500).json({ error: 'Ошибка сервера' });
+    }
+  });
+
+  // === MANAGER/ADMIN: Изменить менеджера клиента ===
+  router.put('/users/:id/manager', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
+    const { id } = req.params;
+    const { manager_id } = req.body;
+
+    try {
+      // Verify target user exists and is a client
+      const targetUser = await dbQuery(
+        'SELECT id, role FROM users WHERE id = $1',
+        [id],
+        'get_target_user_for_manager_change'
+      );
+
+      if (targetUser.rows.length === 0) {
+        return res.status(404).json({ error: 'Пользователь не найден' });
+      }
+
+      if (targetUser.rows[0].role !== 'client') {
+        return res.status(400).json({ error: 'Можно назначить менеджера только клиенту' });
+      }
+
+      // Validate new manager if provided
+      if (manager_id !== null && manager_id !== undefined) {
+        const managerUser = await dbQuery(
+          'SELECT id, role, is_active FROM users WHERE id = $1',
+          [manager_id],
+          'validate_new_manager'
+        );
+
+        if (managerUser.rows.length === 0) {
+          return res.status(404).json({ error: 'Менеджер не найден' });
+        }
+
+        if (!['manager', 'admin'].includes(managerUser.rows[0].role)) {
+          return res.status(400).json({ error: 'Назначить можно только менеджера или админа' });
+        }
+
+        if (!managerUser.rows[0].is_active) {
+          return res.status(400).json({ error: 'Нельзя назначить деактивированного менеджера' });
+        }
+      }
+
+      const result = await dbQuery(
+        `UPDATE users SET manager_id = $1, updated_at = CURRENT_TIMESTAMP 
+         WHERE id = $2 
+         RETURNING id, name, email, manager_id`,
+        [manager_id || null, id],
+        'change_client_manager'
+      );
+
+      logger.info('Менеджер клиента изменён', { 
+        changedBy: req.user.id,
+        clientId: id,
+        newManagerId: manager_id
+      });
+
+      res.json({
+        message: manager_id ? 'Менеджер успешно назначен' : 'Менеджер удалён',
+        user: result.rows[0]
+      });
+
+    } catch (err) {
+      logger.error('Ошибка изменения менеджера', { clientId: id, error: err.message });
+      res.status(500).json({ error: 'Ошибка сервера' });
+    }
+  });
+
+  // === MANAGER/ADMIN: Изменить количество кредитов пользователя ===
+  router.put('/users/:id/credits', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
+    const { id } = req.params;
+    const { credits } = req.body;
+
+    if (typeof credits !== 'number' || credits < 0) {
+      return res.status(400).json({ error: 'Кредиты должны быть неотрицательным числом' });
+    }
+
+    try {
+      const result = await dbQuery(
+        `UPDATE users SET credits = $1, updated_at = CURRENT_TIMESTAMP 
+         WHERE id = $2 
+         RETURNING id, name, email, credits`,
+        [credits, id],
+        'change_user_credits'
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Пользователь не найден' });
+      }
+
+      logger.info('Кредиты пользователя изменены', { 
+        changedBy: req.user.id,
+        targetUserId: id,
+        newCredits: credits
+      });
+
+      res.json({
+        message: 'Кредиты успешно изменены',
+        user: result.rows[0]
+      });
+
+    } catch (err) {
+      logger.error('Ошибка изменения кредитов', { targetUserId: id, error: err.message });
+      res.status(500).json({ error: 'Ошибка сервера' });
+    }
+  });
+
+  // === MANAGER: Получить своих клиентов ===
+  router.get('/my-clients', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
+    try {
+      const result = await dbQuery(
+        `SELECT id, name, email, phone, role, is_active, credits, last_login, created_at 
+         FROM users 
+         WHERE manager_id = $1 
+         ORDER BY created_at DESC`,
+        [req.user.id],
+        'get_my_clients'
+      );
+
+      logger.info('Список клиентов менеджера запрошен', { 
+        managerId: req.user.id,
+        clientCount: result.rows.length
+      });
+
+      res.json(result.rows);
+
+    } catch (err) {
+      logger.error('Ошибка получения списка клиентов', { managerId: req.user.id, error: err.message });
       res.status(500).json({ error: 'Ошибка сервера' });
     }
   });
