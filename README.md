@@ -39,6 +39,8 @@ A simple REST API application built with Node.js, Express, and PostgreSQL, fully
     ├── Dockerfile
     ├── package.json
     ├── server.js
+    ├── auth.js               # Модуль аутентификации (JWT, роли)
+    ├── files.js              # Модуль управления файлами
     ├── logger.js             # Модуль логирования (Winston)
     ├── metrics.js            # Модуль метрик (Prometheus)
     ├── init.sql
@@ -47,7 +49,11 @@ A simple REST API application built with Node.js, Express, and PostgreSQL, fully
     └── migrations/           # Миграции базы данных
         ├── 1701408000000_create-users-table.js
         ├── 1701408001000_seed-initial-users.js
-        └── 1701408002000_add-user-phone-column.js
+        ├── 1701408002000_add-user-phone-column.js
+        ├── 1701408003000_add-auth-and-roles.js
+        ├── 1701408004000_seed-admin-user.js
+        ├── 1701408005000_add-manager-and-credits.js
+        └── 1701408006000_create-files-table.js
 ```
 
 ## Tech Stack
@@ -56,6 +62,8 @@ A simple REST API application built with Node.js, Express, and PostgreSQL, fully
 - **Framework:** Express.js
 - **Database:** PostgreSQL 13
 - **Migrations:** node-pg-migrate
+- **Authentication:** JWT (jsonwebtoken) + bcrypt
+- **File Uploads:** Multer
 - **Web Server:** Nginx (Alpine)
 - **Containerization:** Docker & Docker Compose
 - **Logging:** Winston + Morgan
@@ -143,6 +151,10 @@ exports.down = (pgm) => {
 | `1701408000000_create-users-table` | Создание таблицы users |
 | `1701408001000_seed-initial-users` | Начальные тестовые данные |
 | `1701408002000_add-user-phone-column` | Добавление поля phone |
+| `1701408003000_add-auth-and-roles` | Аутентификация и роли (admin, manager, editor, client) |
+| `1701408004000_seed-admin-user` | Создание админа (admin@chronolegal.com / admin123) |
+| `1701408005000_add-manager-and-credits` | Добавление manager_id и credits для клиентов |
+| `1701408006000_create-files-table` | Создание таблицы files для документов |
 
 ### Таблица истории миграций
 
@@ -189,6 +201,116 @@ Nginx выполняет две функции:
 | POST | `/users` | Create a new user |
 | PUT | `/users/:id` | Update a user |
 | DELETE | `/users/:id` | Delete a user |
+
+## File Management
+
+The application includes a comprehensive file management system that allows users to upload documents and enables staff (managers, admins, editors) to access client files.
+
+### Features
+
+- **Upload files**: Users can upload documents (PDF, Word, Excel, images, etc.)
+- **Multiple file upload**: Up to 10 files at once
+- **File preview**: View file details before downloading
+- **Access control**: Role-based access to client files
+- **Soft delete**: Files are marked as deleted but can be recovered
+
+### Access Control Rules
+
+| Role | Own Files | Client Files |
+|------|-----------|--------------|
+| Client | Upload, View, Download, Delete | - |
+| Editor | Upload, View, Download, Delete | View, Download (all clients) |
+| Manager | Upload, View, Download, Delete | View, Download (assigned clients only) |
+| Admin | Upload, View, Download, Delete | View, Download, Delete (all clients) |
+
+### File API Endpoints
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/files/upload` | All users | Upload single file |
+| POST | `/files/upload-multiple` | All users | Upload multiple files (max 10) |
+| GET | `/files/my-files` | All users | List current user's files |
+| GET | `/files/user/:userId` | Admin, Manager, Editor | List specific user's files |
+| GET | `/files/all-clients` | Admin, Manager, Editor | List all clients with file counts |
+| GET | `/files/download/:fileId` | Authorized | Download a file |
+| GET | `/files/:fileId` | Authorized | Get file details |
+| PUT | `/files/:fileId` | Owner only | Update file description |
+| DELETE | `/files/:fileId` | Owner or Admin | Soft delete a file |
+
+### Supported File Types
+
+| Category | Extensions |
+|----------|------------|
+| Documents | PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT, CSV, RTF |
+| Images | JPEG, PNG, GIF, WebP, TIFF |
+| Archives | ZIP, RAR, 7Z |
+
+### File Upload Limits
+
+| Parameter | Value |
+|-----------|-------|
+| Max file size | 50 MB |
+| Max files per upload | 10 |
+
+### Usage Examples
+
+#### Upload a File
+
+**Linux/macOS:**
+
+```bash
+curl -X POST http://localhost:8080/api/files/upload \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -F "file=@/path/to/document.pdf" \
+  -F "description=Important contract"
+```
+
+**PowerShell:**
+
+```powershell
+$headers = @{ "Authorization" = "Bearer YOUR_TOKEN" }
+$form = @{
+    file = Get-Item -Path "C:\path\to\document.pdf"
+    description = "Important contract"
+}
+Invoke-RestMethod -Uri "http://localhost:8080/api/files/upload" -Method Post -Headers $headers -Form $form
+```
+
+#### Get My Files
+
+```bash
+curl -X GET http://localhost:8080/api/files/my-files \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+#### Download a File
+
+```bash
+curl -X GET http://localhost:8080/api/files/download/1 \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -o downloaded_file.pdf
+```
+
+#### List Client Files (Admin/Manager/Editor)
+
+```bash
+curl -X GET http://localhost:8080/api/files/user/5 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+### File Storage
+
+Files are stored in a Docker volume (`uploads_data`) to persist data across container restarts. Each user's files are organized in separate directories by user ID.
+
+```
+/app/uploads/
+├── 1/           # User ID 1's files
+│   ├── abc123.pdf
+│   └── def456.docx
+├── 2/           # User ID 2's files
+│   └── ghi789.png
+└── ...
+```
 
 ## Usage Examples
 
@@ -275,14 +397,41 @@ docker exec -it node-app-db2-db-1 psql -U user -d mydb
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100),
-    email VARCHAR(100),
+    email VARCHAR(100) UNIQUE NOT NULL,
     phone VARCHAR(20),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    password_hash VARCHAR(255),
+    role user_role DEFAULT 'client',  -- admin, manager, editor, client
+    is_active BOOLEAN DEFAULT true,
+    manager_id INTEGER REFERENCES users(id),
+    credits INTEGER DEFAULT 10,
+    last_login TIMESTAMP,
+    password_reset_token VARCHAR(255),
+    password_reset_expires TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Таблица files
+CREATE TABLE files (
+    id SERIAL PRIMARY KEY,
+    filename VARCHAR(255) NOT NULL,
+    original_name VARCHAR(255) NOT NULL,
+    mime_type VARCHAR(100) NOT NULL,
+    size BIGINT NOT NULL,
+    path VARCHAR(500) NOT NULL,
+    owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    description TEXT,
+    is_deleted BOOLEAN DEFAULT false,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Индексы
 CREATE INDEX users_email_index ON users (email);
 CREATE INDEX users_phone_index ON users (phone);
+CREATE INDEX users_role_index ON users (role);
+CREATE INDEX files_owner_id_index ON files (owner_id);
+CREATE INDEX files_created_at_index ON files (created_at);
 ```
 
 ## Environment Variables
