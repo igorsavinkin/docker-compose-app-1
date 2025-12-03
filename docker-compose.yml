@@ -40,6 +40,7 @@ services:
       - ./backend:/app
       - /app/node_modules
       - backend_logs:/app/logs
+      - uploads_data:/app/uploads
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/health"]
@@ -117,3 +118,4 @@ volumes:
   prometheus_data:
   grafana_data:
   backend_logs:
+  uploads_data:

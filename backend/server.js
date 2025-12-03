@@ -5,6 +5,7 @@ const { runMigrations } = require('./run-migrations');
 const logger = require('./logger');
 const { register, metricsMiddleware, dbErrorsTotal, dbActiveConnections, dbQueriesTotal } = require('./metrics');
 const { createAuthRouter } = require('./auth');
+const { createFilesRouter } = require('./files');
 
 const app = express();
 const port = 3000;
@@ -62,6 +63,10 @@ app.use(morgan('combined', { stream: logger.stream }));
 // Подключение роутера аутентификации
 const { router: authRouter, authenticateToken, requireRole, ROLES } = createAuthRouter(pool, logger, dbQuery);
 app.use('/auth', authRouter);
+
+// Подключение роутера файлов
+const filesRouter = createFilesRouter(pool, logger, dbQuery, authenticateToken, requireRole);
+app.use('/files', filesRouter);
 
 // Инициализация базы данных через миграции
 async function initializeDatabase() {

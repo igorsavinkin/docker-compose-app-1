@@ -649,7 +649,7 @@ function createAuthRouter(pool, logger, dbQuery) {
 
   // === MANAGER: Создать пользователя с определённой ролью ===
   router.post('/users', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
-    const { name, email, password, phone, role } = req.body;
+    const { name, email, password, phone, role, manager_id, credits } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ error: 'Имя, email и пароль обязательны' });
@@ -681,18 +681,46 @@ function createAuthRouter(pool, logger, dbQuery) {
 
       const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
+      // Determine manager: use provided manager_id, current user (if manager), or auto-assign
+      let assignedManagerId = manager_id;
+      if (userRole === 'client' && assignedManagerId === undefined) {
+        // If creator is manager, assign to them; otherwise auto-assign
+        if (req.user.role === 'manager') {
+          assignedManagerId = req.user.id;
+        } else {
+          assignedManagerId = await assignManager();
+        }
+      }
+
+      // Validate manager_id if provided
+      if (assignedManagerId) {
+        const managerCheck = await dbQuery(
+          'SELECT id, role, is_active FROM users WHERE id = $1',
+          [assignedManagerId],
+          'validate_manager_for_create'
+        );
+        if (managerCheck.rows.length === 0 || !['manager', 'admin'].includes(managerCheck.rows[0].role)) {
+          return res.status(400).json({ error: 'Указанный менеджер не найден или имеет неподходящую роль' });
+        }
+      }
+
+      // Default credits to 10 if not specified
+      const userCredits = typeof credits === 'number' ? credits : 10;
+
       const result = await dbQuery(
-        `INSERT INTO users (name, email, phone, password_hash, role, is_active, created_at)
-         VALUES ($1, $2, $3, $4, $5, true, CURRENT_TIMESTAMP)
-         RETURNING id, name, email, role, is_active, created_at`,
-        [name, email.toLowerCase(), phone || null, passwordHash, userRole],
+        `INSERT INTO users (name, email, phone, password_hash, role, is_active, manager_id, credits, created_at)
+         VALUES ($1, $2, $3, $4, $5, true, $6, $7, CURRENT_TIMESTAMP)
+         RETURNING id, name, email, role, is_active, manager_id, credits, created_at`,
+        [name, email.toLowerCase(), phone || null, passwordHash, userRole, assignedManagerId || null, userCredits],
         'admin_create_user'
       );
 
       logger.info('Пользователь создан администратором/менеджером', { 
         createdBy: req.user.id,
         newUserId: result.rows[0].id,
-        role: userRole
+        role: userRole,
+        managerId: assignedManagerId,
+        credits: userCredits
       });
 
       res.status(201).json({
